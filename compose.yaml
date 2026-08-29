@@ -26,7 +26,7 @@ services:
       LLAMA_CACHE: /models/cache
       HF_HOME: /models/hf-cache
     volumes:
-      - models_data:/models
+      - data:/models
     restart: unless-stopped
     # Tidak expose ke publik: hanya bisa diakses antar-container via network internal
     networks:
@@ -45,17 +45,15 @@ services:
       # Naikkan timeout list model utk model besar (default 10s)
       AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST: "30"
     volumes:
-      - openwebui_data:/app/backend/data
-    ports:
-      - "${PORT:-3000}:8080"
+      - data:/app/backend/data
     restart: unless-stopped
     networks:
       - internal
 
-# Named volume (bukan bind mount ./ ). Penting utk Dokploy:
-# saat AutoDeploy, repo di-clone ulang & folder relatif (./models, ./data) ikut
-# terhapus -> data/model hilang. Named volume disimpan Docker & persist + bisa di-backup
-# lewat fitur Volume Backups Dokploy.
+# Satu Docker named volume `data` untuk semua data persisten (model GGUF di /models
+# & database Open WebUI di /app/backend/data). Named volume (bukan bind mount ./)
+# penting utk Dokploy: saat AutoDeploy repo di-clone ulang & folder relatif (./models,
+# ./data) ikut terhapus -> data/model hilang. Named volume disimpan Docker & persist
+# + bisa di-backup lewat fitur Volume Backups Dokploy.
 volumes:
-  models_data:
-  openwebui_data:
+  data:

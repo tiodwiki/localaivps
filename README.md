@@ -21,7 +21,7 @@ Poin penting:
 - **Router mode** (`--models-dir /models`) meniru gaya Ollama: model terdeteksi otomatis,
   termuat on-demand saat diminta, dan bisa di-unload saat tidak dipakai supaya hemat RAM.
 - **Download model dari HF disimpan ke volume mount** — env `LLAMA_CACHE=/models/cache`
-  dan `HF_HOME=/models/hf-cache` memastikan semua unduhan masuk volume `models_data`
+  dan `HF_HOME=/models/hf-cache` memastikan semua unduhan masuk volume `data`
   (di-`mount` ke `/models`), bukan cache tersembunyi.
 - Tuned untuk **VPS ARM 2-core / 12GB RAM**: `--threads 2`, `--ctx-size 4096`, `--flash-attn`,
   `--models-max 2` (maksimal 2 model termuat bersamaan).
@@ -83,11 +83,11 @@ Cara paling simpel & direkomendasikan Dokploy (Traefik disuntik otomatis):
 
 ### 4. Volume & persistensi
 
-`compose.yaml` memakai **Docker named volume** (`models_data` & `openwebui_data`)
+`compose.yaml` memakai **satu Docker named volume `data`** untuk semua data persisten,
 alih-alih bind mount relatif `./models`/`./data`:
 
-- `models_data:/models` → tempat semua file GGUF + cache HF.
-- `openwebui_data:/app/backend/data` → database & chat Open WebUI.
+- `data:/models` → tempat semua file GGUF + cache HF.
+- `data:/app/backend/data` → database & chat Open WebUI (keduanya satu volume `data`).
 
 > **Kenapa bukan `./models`?** Saat Dokploy *AutoDeploy*, repo di-clone ulang pada setiap
 > deploy dan isi folder relatif ikut dihapus — bind mount `./models`/`./data` akan
@@ -95,8 +95,8 @@ alih-alih bind mount relatif `./models`/`./data`:
 > Named volume disimpan Docker (persisten antar deploy) dan bisa di-backup lewat fitur
 > **Volume Backups** Dokploy (ke S3) dengan mudah.
 >
-> Manajemen volume ada di halaman project Dokploy → **Volume** / **Volume Backups**;
-> file-nya bisa dicek via tab terminal/exec container (`/models`, `/app/backend/data`).
+> Manajemen volume `data` ada di halaman project Dokploy → **Volume** / **Volume Backups**;
+> isinya bisa dicek via tab terminal/exec container (`/models`, `/app/backend/data`).
 
 ### 5. Deploy & verifikasi log
 
@@ -123,7 +123,7 @@ alih-alih bind mount relatif `./models`/`./data`:
 2. Buat akun admin pertama kali, lalu buka **Settings (⚙️) → Admin Panel → Models → Manage**.
 3. Di panel itu kamu bisa:
    - **Download**: isi nama repo HF (contoh `ibm-granite/granite-4.2-3b-GGUF`)
-     → llama-server mengunduh GGUF ke volume `models_data` (ter-mount di `/models`).
+     → llama-server mengunduh GGUF ke volume `data` (ter-mount di `/models`).
    - **Load / Switch**: model tersedia di dropdown chat; pilih → termuat otomatis.
    - **Unload**: klik eject pada model untuk melepas dari RAM tanpa restart.
    - **Delete**: hapus model dari server (dan dari disk) untuk membebaskan storage.

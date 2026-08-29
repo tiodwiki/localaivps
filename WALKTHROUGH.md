@@ -94,17 +94,18 @@ Dokploy menjalankan Traefik sebagai reverse-proxy dan menyuntik label-nya otomat
 
 ### 3.4. Volume & persistensi data
 
-`compose.yaml` memakai **Docker named volume** (bukan bind mount `./`), tepat untuk Dokploy:
+`compose.yaml` memakai **satu Docker named volume `data`** (bukan bind mount `./`),
+tepat untuk Dokploy — dipakai untuk semua data persisten:
 
-- `models_data:/models` → tempat semua GGUF + cache HF (`LLAMA_CACHE=/models/cache`).
-- `openwebui_data:/app/backend/data` → database & chat Open WebUI.
+- `data:/models` → tempat semua GGUF + cache HF (`LLAMA_CACHE=/models/cache`).
+- `data:/app/backend/data` → database & chat Open WebUI (satu volume `data` yang sama).
 
 > **Jangan ganti ke `./models`/`./data`.** Saat Dokploy menjalankan **AutoDeploy**, ia me-`git clone`
 > ulang repo pada setiap deploy → folder relatif `./` benar-benar dihapus, sehingga **semua model &
 > chat hilang tiap kali kamu push & redeploy**. Named volume disimpan Docker (persisten) dan bisa
 > di-backup otomatis lewat fitur **Volume Backups** Dokploy (mis. ke S3).
 >
-> Named volume dibuat otomatis saat deploy pertama. Kelola (lihat/buat/backup) di halaman
+> Named volume `data` dibuat otomatis saat deploy pertama. Kelola (lihat/buat/backup) di halaman
 > project Dokploy → **Volumes** / **Volume Backups**. Isi volume bisa dicek lewat tab
 > terminal/exec tiap container (`/models`, `/app/backend/data`).
 
@@ -138,7 +139,7 @@ Open WebUI perlu tahu backend-nya adalah llama.cpp agar panel **Manage** model a
 2. Klik **Download**.
 3. Masukkan nama repo HF: `ibm-granite/granite-4.2-3b-GGUF`
    (bisa juga pakai `:Q4_K_M` untuk kuantisasi spesifik).
-4. Biarkan llama-server mengunduh ke volume `models_data` (ter-mount di `/models`). Ukuran Q4_K_M ≈ 2,2 GB.
+4. Biarkan llama-server mengunduh ke volume `data` (ter-mount di `/models`). Ukuran Q4_K_M ≈ 2,2 GB.
 
 > Cocok utk VPS ini: model **±3B / Q4_K_M** (~2 GB). Jangan pilih Q8/_8B+ tanpa GPU.
 
@@ -194,7 +195,7 @@ Untuk memastikan named volume benar-benar dipakai (tidak hilang saat redeploy):
 - Unduh satu model lalu **push perubahan**/redeploy; cek `v1/models` — model harus **masih ada**.
 - Cek isi volume dari container: `df -h` → `/models` bertambah sesuai ukuran model
   (jangan sampai sisa disk < 5 GB). Lihat file via terminal service `open-webui`
-  (`ls /app/backend/data`) atau halaman project Dokploy → **Volumes**.
+  (`ls /app/backend/data`) atau halaman project Dokploy → **Volumes** (`data`).
 - Cek RAM saat model dipakai: `htop` → pastikan 12 GB tidak menipis habis saat 2 model termuat.
 
 ---
@@ -205,7 +206,7 @@ Untuk memastikan named volume benar-benar dipakai (tidak hilang saat redeploy):
   yang `docker compose run llama-server ... -hf ibm-granite/granite-4.2-3b-GGUF` sekali jalan), supaya
   model sudah tersedia tanpa klik manual.
 - **Healthcheck** di `llama-server` (mis. `curl -f http://localhost:8080/health`) agar Dokploy menandai `healthy`.
-- **Backup otomatis**: aktifkan **Volume Backups** Dokploy untuk `models_data` & `openwebui_data`
+- **Backup otomatis**: aktifkan **Volume Backups** Dokploy untuk volume `data`
   (mis. ke S3) supaya model + histori chat selalu aman — backup named volume jauh lebih rapi
   daripada menyalin folder `./`.
 - **Domain + HTTPS** sudah disediakan Traefik Dokploy — tinggal tempel subdomain di service `open-webui` (tab Domains).
