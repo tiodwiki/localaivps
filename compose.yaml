@@ -23,6 +23,7 @@ services:
       - --threads
       - "${THREADS:-2}"
       - --flash-attn
+      - auto
     environment:
       # Download model dari HF ikut masuk volume mount (bukan cache tersembunyi)
       LLAMA_CACHE: /models/cache
