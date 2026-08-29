@@ -58,8 +58,11 @@ Dokploy mendukung ARM — tidak ada konfirmasi khusus yang perlu diubah.
 
 1. Login Dokploy.
 2. Klik **+ New Project** → beri nama (mis. `llm`).
-3. Di project tersebut, **+ New Service** → pilih **Docker Compose** (jangan pilih upload-folder).
-4. Set **source**: sambungkan ke **Git Provider** (GitHub) → pilih repo `openwebui-llamacpp`.
+3. Di project tersebut, **+ New Service** → **Build Method: `Docker Compose`**
+   (pilih ini, **bukan** `Dockerfile`/`Nixpacks`) → **Source: Git Provider** (GitHub) →
+   pilih repo `openwebui-llamacpp`.
+4. Pastikan **Compose Path** mengarah ke `compose.yaml` (field ini default `docker-compose.yml`
+   — karena repo ini namanya `compose.yaml`, set jadi `./compose.yaml` bila perlu).
 
 ### 3.2. Config deploy (Compose)
 
@@ -217,6 +220,7 @@ Untuk memastikan named volume benar-benar dipakai (tidak hilang saat redeploy):
 
 | Gejala | Penyebab / solusi |
 |--------|-------------------|
+| Deploy gagal `failed to read dockerfile: no such file ...` / Dokploy mencoba *build* image | Service dibuat dengan **Build Method `Dockerfile`** padahal repo ini pakai image registry. Hapus service, buat baru dengan **Build Method `Docker Compose`**, dan set **Compose Path** ke `compose.yaml`. |
 | `timeout` saat list model | Model besar → naikkan `AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST=30` (sudah ada di compose). |
 | Panel **Manage** model tidak muncul / tombol eject error | Provider OpenAI belum **llama.cpp** → set manual di Connections → OpenAI. |
 | Server mati (OOM) saat 2 model jalan | Turunkan `CTX_SIZE` ke `2048`, atau `--models-max 1`, atau pilih model kuantisasi lebih kecil. |
