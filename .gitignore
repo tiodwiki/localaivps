@@ -1,0 +1,17 @@
+# Model files & cache (volume mount, jangan masuk git)
+/models/*
+!/models/.gitkeep
+
+# Data runtime Open WebUI
+/data/*
+!/data/.gitkeep
+
+# Konfigurasi pribadi / rahasia
+.env
+
+# Editor / OS
+.DS_Store
+*.swp
+
+# Tooling lokal
+.freebuff/

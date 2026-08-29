@@ -1,0 +1,57 @@
+services:
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: llama-server
+    command:
+      - llama-server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --api-key
+      - ${LLAMA_API_KEY}
+      # Router mode: tidak ada model tetap -> load/unload/switch lewat API/UI
+      - --models-dir
+      - /models
+      # Jumlah model yang boleh termuat sekaligus (RAM 12GB / 2 core)
+      - --models-max
+      - "2"
+      - --ctx-size
+      - "${CTX_SIZE:-4096}"
+      - --threads
+      - "${THREADS:-2}"
+      - --flash-attn
+    environment:
+      # Download model dari HF ikut masuk volume mount (bukan cache tersembunyi)
+      LLAMA_CACHE: /models/cache
+      HF_HOME: /models/hf-cache
+    volumes:
+      - ./models:/models
+    restart: unless-stopped
+    # Tidak expose ke publik: hanya bisa diakses antar-container via network internal
+    networks:
+      - internal
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    depends_on:
+      - llama-server
+    environment:
+      # Hubungkan Open WebUI ke llama-server (OpenAI-compatible endpoint)
+      OPENAI_API_BASE_URL: http://llama-server:8080/v1
+      OPENAI_API_KEY: ${LLAMA_API_KEY}
+      WEBUI_NAME: Open WebUI (llama.cpp)
+      # Naikkan timeout list model utk model besar (default 10s)
+      AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST: "30"
+    volumes:
+      - ./data:/app/backend/data
+    ports:
+      - "${PORT:-3000}:8080"
+    restart: unless-stopped
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
