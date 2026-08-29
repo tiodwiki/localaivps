@@ -27,6 +27,13 @@ Poin penting:
 
 ---
 
+## Deployment step-by-step
+
+Panduan end-to-end (repo → push GitHub → install Dokploy → deploy → chat pertama
++ kelola model via GUI) ada di **[WALKTHROUGH.md](WALKTHROUGH.md)**.
+
+---
+
 ## Deploy di Dokploy
 
 1. Buat **project** baru di Dokploy → pilih jenis **Docker Compose**.
