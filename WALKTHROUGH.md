@@ -108,9 +108,13 @@ tepat untuk Dokploy — dipakai untuk semua data persisten:
 > chat hilang tiap kali kamu push & redeploy**. Named volume disimpan Docker (persisten) dan bisa
 > di-backup otomatis lewat fitur **Volume Backups** Dokploy (mis. ke S3).
 >
-> Named volume `data` dibuat otomatis saat deploy pertama. Kelola (lihat/buat/backup) di halaman
-> project Dokploy → **Volumes** / **Volume Backups**. Isi volume bisa dicek lewat tab
-> terminal/exec tiap container (`/models`, `/app/backend/data`).
+> **Tidak ada field volume yang perlu diisi di UI Dokploy.** Pada service **Docker Compose**,
+> volume mount dideklarasikan **sepenuhnya di `compose.yaml`** — Dokploy membaca file itu dan
+> membuat named volume `data` otomatis saat deploy pertama (tidak perlu dibuat manual).
+> Tab Dokploy yg tersedia utk Compose hanya **Volume Backups** (backup named volume, bukan
+> mengatur mount); kalau nanti pakai bind mount, baru lewat **Advanced → Mounts/File Mounts**.
+> Isi volume `data` bisa dicek lewat tab terminal/exec tiap container (`/models`, `/app/backend/data`),
+> dan di-backup lewat **Volume Backups**.
 
 ### 3.5. Deploy
 

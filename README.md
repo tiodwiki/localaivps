@@ -95,8 +95,12 @@ alih-alih bind mount relatif `./models`/`./data`:
 > Named volume disimpan Docker (persisten antar deploy) dan bisa di-backup lewat fitur
 > **Volume Backups** Dokploy (ke S3) dengan mudah.
 >
-> Manajemen volume `data` ada di halaman project Dokploy → **Volume** / **Volume Backups**;
-> isinya bisa dicek via tab terminal/exec container (`/models`, `/app/backend/data`).
+> **Tidak perlu mengisi apa pun di field volume Dokploy** — pada service **Docker Compose**,
+> volume tidak di-set lewat UI Dokploy, melainkan **seluruhnya dideklarasikan di `compose.yaml`**
+> (Dokploy membaca & membuat named volume `data` otomatis saat deploy). UI Dokploy utk Compose
+> hanya punya tab **Volume Backups** (khusus backup volume, bukan mengatur mount).
+>
+> Baru kalau kamu beralih ke bind mount `../files/…`, Dokploy memakai **Advanced → Mounts/File Mounts**.
 
 ### 5. Deploy & verifikasi log
 
