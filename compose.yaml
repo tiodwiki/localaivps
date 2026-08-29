@@ -46,6 +46,8 @@ services:
       AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST: "30"
     volumes:
       - data:/app/backend/data
+    ports:
+      - "${PORT:-3000}:8080"
     restart: unless-stopped
     networks:
       - internal
@@ -57,3 +59,9 @@ services:
 # + bisa di-backup lewat fitur Volume Backups Dokploy.
 volumes:
   data:
+
+# Jaringan internal antar-service: llama-server hanya bisa diakses dari open-webui,
+# tidak terbuka ke publik/host.
+networks:
+  internal:
+    driver: bridge
