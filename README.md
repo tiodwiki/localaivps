@@ -21,7 +21,8 @@ Poin penting:
 - **Router mode** (`--models-dir /models`) meniru gaya Ollama: model terdeteksi otomatis,
   termuat on-demand saat diminta, dan bisa di-unload saat tidak dipakai supaya hemat RAM.
 - **Download model dari HF disimpan ke volume mount** — env `LLAMA_CACHE=/models/cache`
-  dan `HF_HOME=/models/hf-cache` memastikan semua unduhan masuk `./models/`, bukan cache tersembunyi.
+  dan `HF_HOME=/models/hf-cache` memastikan semua unduhan masuk volume `models_data`
+  (di-`mount` ke `/models`), bukan cache tersembunyi.
 - Tuned untuk **VPS ARM 2-core / 12GB RAM**: `--threads 2`, `--ctx-size 4096`, `--flash-attn`,
   `--models-max 2` (maksimal 2 model termuat bersamaan).
 
@@ -34,15 +35,85 @@ Panduan end-to-end (repo → push GitHub → install Dokploy → deploy → chat
 
 ---
 
-## Deploy di Dokploy
+## Deploy di Dokploy (env, domain, volume, verifikasi log)
 
-1. Buat **project** baru di Dokploy → pilih jenis **Docker Compose**.
-2. Set koneksi repo: tempel URL GitHub repo ini.
-3. Di pengaturan project, tambah **env** dari `.env.example`. Isi sekurangnya:
-   - `LLAMA_API_KEY` — token apa pun (mis. hasil `openssl rand -hex 32`). Wajib.
-   - `PORT` (default `3000`), `CTX_SIZE` (default `4096`), `THREADS` (default `2`) — opsional.
-4. Deploy. Dokploy akan membuat volume maupun bind mount `models/` dan `data/` sesuai store yang kamu set.
-   > Semua model GGUF tersimpan di `models/` dan data Open WebUI di `data/` — **persist lewat volume mount**.
+> Perlu sudah: repo ini ter-push ke GitHub (lihat bagian "Hubungkan repo ke GitHub"),
+> akun Git provider tersambung di Dokploy, dan VPS tamu memakai Ubuntu 24.04 + Dokploy.
+> Ikut detail penuh di **[WALKTHROUGH.md](WALKTHROUGH.md)**.
+
+### 1. Buat service **Docker Compose** dan hubungkan repo
+
+1. Login Dokploy → **+ New Project** → beri nama (mis. `llm`).
+2. Di dalam project → **+ New Service** → pilih **Docker Compose** (bukan *single container*).
+3. Set **source / Git Provider**: pilih GitHub → repo `openwebui-llamacpp` → **Branch** `main`.
+
+Dokploy membaca `compose.yaml` langsung dari repo untuk di-`docker compose up`.
+
+### 2. Isi environment (tab **Environment**)
+
+Dokploy menyimpan variabel tab ini ke file `.env` di folder project, lalu mengganti
+`${VAR}` yang dipakai di `compose.yaml` saat deploy. Salin nilai dari `.env.example`
+(**jangan** ikut-tempel baris `[TEMPLATE]`/komentar — cukup pasangan `KEY=VALUE`):
+
+- **`LLAMA_API_KEY`** — **wajib.** Token apa pun (mis. `openssl rand -hex 32`).
+  Dipakai llama-server sebagai kunci API sekaligus `OPENAI_API_KEY` Open WebUI.
+- Opsional (hanya bila ingin menimpa): `PORT=3000`, `CTX_SIZE=4096`, `THREADS=2`.
+  (Tanpa diisi pun bekerja karena compose punya default `:-`.)
+
+`LLAMA_CACHE` & `HF_HOME` tidak perlu diisi — sudah ditetapkan di `compose.yaml`
+supaya semua unduhan model tersimpan ke dalam volume.
+
+### 3. Domain & publikasi (tab **Domains**)
+
+Cara paling simpel & direkomendasikan Dokploy (Traefik disuntik otomatis):
+
+1. Buka tab **Domains** pada service → **Add Domain**.
+2. Pilih service **`open-webui`**, port di dalam container **`8080`**, isi subdomain
+   mis. `chat.vpsmu.com`, centang **HTTPS** (Let's Encrypt otomatis).
+3. Pastikan **DNS A record** `chat -> <IP_VPS>` sudah dibuat di DNS provider.
+4. Klik **Preview Compose** untuk memeriksa label Traefik & network yang akan disuntik,
+   lalu simpan.
+
+> Akses jadi `https://chat.vpsmu.com`. Kalau belum punya domain, bisa juga dipublikasikan
+> lewat port host: pastikan `PORT=3000` terisi maka browser membuka `http://<IP_VPS>:3000`
+> (mapping `8080` container ↔ `3000` host).
+>
+> `llama-server` **tidak** dipublic — ia hanya diakses antar-container via network
+> internal `http://llama-server:8080`.
+
+### 4. Volume & persistensi
+
+`compose.yaml` memakai **Docker named volume** (`models_data` & `openwebui_data`)
+alih-alih bind mount relatif `./models`/`./data`:
+
+- `models_data:/models` → tempat semua file GGUF + cache HF.
+- `openwebui_data:/app/backend/data` → database & chat Open WebUI.
+
+> **Kenapa bukan `./models`?** Saat Dokploy *AutoDeploy*, repo di-clone ulang pada setiap
+> deploy dan isi folder relatif ikut dihapus — bind mount `./models`/`./data` akan
+> **kehilangan semua model & chat** saat kamu push perubahan / redeploy.
+> Named volume disimpan Docker (persisten antar deploy) dan bisa di-backup lewat fitur
+> **Volume Backups** Dokploy (ke S3) dengan mudah.
+>
+> Manajemen volume ada di halaman project Dokploy → **Volume** / **Volume Backups**;
+> file-nya bisa dicek via tab terminal/exec container (`/models`, `/app/backend/data`).
+
+### 5. Deploy & verifikasi log
+
+1. Klik **Deploy** pada service → tunggu build & pull image selesai di tab **Deployments**.
+2. Buka tab **Logs** → pilih service-nya:
+   - **`llama-server`**: cari baris `server is listening on http://0.0.0.0:8080` (router mode aktif).
+   - **`open-webui`**: cari baris `Uvicorn running on http://0.0.0.0:8080`.
+   - Tidak ada `error`/`Traceback`/*exit* di kedua service.
+3. Cek endpoint dari dalam container `llama-server` (lewat tab terminal Dokploy atau SSH +
+   `docker compose exec`):
+   ```bash
+   wget -qO- http://localhost:8080/health; echo
+   wget -qO- http://localhost:8080/v1/models
+   ```
+   → `{"status":"ok"}` berarti server hidup; `v1/models` menampilkan model yang terdeteksi.
+4. Buka `https://chat.vpsmu.com`, daftarkan akun admin pertama, dan lanjut ke bagian
+   "Penggunaan" di bawah untuk mengunduh model via GUI.
 
 ---
 
@@ -52,7 +123,7 @@ Panduan end-to-end (repo → push GitHub → install Dokploy → deploy → chat
 2. Buat akun admin pertama kali, lalu buka **Settings (⚙️) → Admin Panel → Models → Manage**.
 3. Di panel itu kamu bisa:
    - **Download**: isi nama repo HF (contoh `ibm-granite/granite-4.2-3b-GGUF`)
-     → llama-server mengunduh GGUF ke volume `./models/`.
+     → llama-server mengunduh GGUF ke volume `models_data` (ter-mount di `/models`).
    - **Load / Switch**: model tersedia di dropdown chat; pilih → termuat otomatis.
    - **Unload**: klik eject pada model untuk melepas dari RAM tanpa restart.
    - **Delete**: hapus model dari server (dan dari disk) untuk membebaskan storage.

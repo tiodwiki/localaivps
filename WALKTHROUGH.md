@@ -67,43 +67,51 @@ Dokploy membaca `compose.yaml` di repo. Di pengaturan service:
 
 - **Git Branch**: `main`.
 - **Build / Command**: biarkan default (compose langsung jalan; tidak ada Dockerfile tambahan).
-- **Environment / Advanced variables**: isi dari `.env.example`. Wajib:
+- **Environment (tab Environment)**: isi dari `.env.example`. Dokploy menulisnya ke `.env`
+  di folder project lalu mengganti `${VAR}` yang dipakai di `compose.yaml`. Pasang pasangan
+  `KETIK=ISI` (lewati baris `[TEMPLATE]`/komentar). Wajib:
   ```
-  LLAMA_API_KEY=isi_luapan_openssl_rand_hex_--_jangan_tebak_tebak_kata_kunci
+  LLAMA_API_KEY=isi_token_openssl_rand_hex_32_abcdef0123...
   ```
-  Opsional: `PORT=3000`, `CTX_SIZE=4096`, `THREADS=2`.
+  Opsional (bila ingin menimpa default di compose): `PORT=3000`, `CTX_SIZE=4096`, `THREADS=2`.
+  `LLAMA_CACHE` & `HF_HOME` sudah ditetapkan di compose → jangan diisi.
 
-> Di compose, prefix `./models` dan `./data` berarti lokasi deploy di server. Dokploy biasanya
-> memakai folder projectnya; pastikan storage-nya **persisten** (lihat 3.4).
+### 3.3. Public access — domain (tab **Domains**)
 
-### 3.3. Public access (domain / port)
+Dokploy menjalankan Traefik sebagai reverse-proxy dan menyuntik label-nya otomatis:
 
-Dokploy menjalankan Traefik sebagai reverse proxy.
+- Buka tab **Domains** pada service → **Add Domain**.
+- Pilih service **`open-webui`**, port container **`8080`**, subdomain mis. `chat.vpsmu.com`,
+  centang **HTTPS** (Let's Encrypt).
+- Pastikan **DNS A record** `chat -> <IP_VPS>` sudah dibuat. Gunakan **Preview Compose**
+  di bawah untuk melihat label Traefik + network yang disuntik sebelum menyimpan.
 
-- **Domain / Traefik**: assign ke service `open-webui` → subdomain mis. `chat.vpsmu.com`
-  + centang HTTPS. Akses jadi `https://chat.vpsmu.com`.
-- **ATAU** pakai `Port = 3000` pada service, akses lewat `http://<IP_VPS>:3000`
-  (karena `PORT` di env dipetakan ke `8080` container Open WebUI).
-
+> Akses jadi `https://chat.vpsmu.com`. Tanpa domain, publikasikan lewat port host:
+> isi `PORT=3000` → buka `http://<IP_VPS>:3000` (mapping `8080` container ↔ `3000` host).
+>
 > `llama-server` **tidak** perlu dipublic — dia hanya diakses oleh `open-webui`
 > via network internal `http://llama-server:8080`.
 
-### 3.4. (Sesuai keinginanmu) Simpan storage lewat volume mount
+### 3.4. Volume & persistensi data
 
-Repo sudah meng-`bind mount`:
+`compose.yaml` memakai **Docker named volume** (bukan bind mount `./`), tepat untuk Dokploy:
 
-- `./models:/models` → tempat semua GGUF + cache HF (`LLAMA_CACHE=/models/cache`).
-- `./data:/app/backend/data` → database & chat Open WebUI.
+- `models_data:/models` → tempat semua GGUF + cache HF (`LLAMA_CACHE=/models/cache`).
+- `openwebui_data:/app/backend/data` → database & chat Open WebUI.
 
-Pastikan di pengaturan service, `models/` dan `data/` mengarah ke path yang **persisten**
-(bukan ephemeral build folder). Di Dokploy kamu bisa atur lewat konfigurasi volume / store bila
-ingin pindah ke path penyimpanan terpisah — ubah bagian `volumes:` di compose sesuai kebutuhan.
+> **Jangan ganti ke `./models`/`./data`.** Saat Dokploy menjalankan **AutoDeploy**, ia me-`git clone`
+> ulang repo pada setiap deploy → folder relatif `./` benar-benar dihapus, sehingga **semua model &
+> chat hilang tiap kali kamu push & redeploy**. Named volume disimpan Docker (persisten) dan bisa
+> di-backup otomatis lewat fitur **Volume Backups** Dokploy (mis. ke S3).
+>
+> Named volume dibuat otomatis saat deploy pertama. Kelola (lihat/buat/backup) di halaman
+> project Dokploy → **Volumes** / **Volume Backups**. Isi volume bisa dicek lewat tab
+> terminal/exec tiap container (`/models`, `/app/backend/data`).
 
 ### 3.5. Deploy
 
-Klik **Deploy** → tunggu log. Tanda sehat:
-- `llama-server` log berisi `server is listening on http://0.0.0.0:8080` (router mode).
-- `open-webui` log berisi `Uvicorn running on http://0.0.0.0:8080`.
+Klik **Deploy** → pantau tab **Deployments** sampai pull image & `up` selesai → lanjut ke Bagian 5
+untuk verifikasi log lengkap.
 
 ---
 
@@ -130,7 +138,7 @@ Open WebUI perlu tahu backend-nya adalah llama.cpp agar panel **Manage** model a
 2. Klik **Download**.
 3. Masukkan nama repo HF: `ibm-granite/granite-4.2-3b-GGUF`
    (bisa juga pakai `:Q4_K_M` untuk kuantisasi spesifik).
-4. Biarkan llama-server mengunduh ke `./models/`. Ukuran Q4_K_M ≈ 2,2 GB.
+4. Biarkan llama-server mengunduh ke volume `models_data` (ter-mount di `/models`). Ukuran Q4_K_M ≈ 2,2 GB.
 
 > Cocok utk VPS ini: model **±3B / Q4_K_M** (~2 GB). Jangan pilih Q8/_8B+ tanpa GPU.
 
@@ -149,20 +157,44 @@ Di **Settings → Admin Panel → Models → Manage** (atau dropdown model):
 
 ---
 
-## 5. Verifikasi & periksa kondisi
+## 5. Verifikasi log & periksa kondisi
 
-`llama-server` berada di network internal, jadi tesnya dari dalam container:
+### 5.1. Cek log lewat panel Dokploy (tab **Logs**)
+
+Di halaman service, buka tab **Logs** → pilih service per service. Tanda sehat setelah deploy:
+
+- **`llama-server`**: muncul `server is listening on http://0.0.0.0:8080` (router mode aktif).
+- **`open-webui`**: muncul `Uvicorn running on http://0.0.0.0:8080`.
+- Tidak ada `error`, `Traceback`, `panic`, atau *exit code ≠ 0* di kedua service;
+  status kontainer hijau `healthy`/`running` di tab **Monitoring**.
+
+> Setiap deploy baru tercatat di tab **Deployments**; bila deploy gagal, log di situ menunjuk
+> penyebab (env belum terisi `LLAMA_API_KEY`, pull image gagal, port bentrok, dll.).
+
+### 5.2. Tes endpoint internal `llama-server`
+
+`llama-server` ada di network internal, jadi tesnya **dari dalam container**. Pakai tab
+terminal/exec Dokploy untuk service `llama-server`, atau SSH VPS lalu:
 
 ```bash
-# Masuk ke folder project deploy di Dokploy (atau pakai tombol logs), lalu:
+# di folder project deploy Dokploy
+
 docker compose exec llama-server sh -c \
   "wget -qO- http://localhost:8080/health; echo; \
    wget -qO- http://localhost:8080/v1/models"
 ```
 
 - `{"status":"ok"}` → server hidup.
-- `v1/models` → daftar model yang terdeteksi router.
-- Cek disk: `df -h` → `/models` bertambah sesuai ukuran model (jangan sampai < 5 GB sisa).
+- `v1/models` → daftar model yang terdeteksi router (sebelum unduh mungkin kosong ‒ normal).
+
+### 5.3. Verifikasi persistensi volume
+
+Untuk memastikan named volume benar-benar dipakai (tidak hilang saat redeploy):
+
+- Unduh satu model lalu **push perubahan**/redeploy; cek `v1/models` — model harus **masih ada**.
+- Cek isi volume dari container: `df -h` → `/models` bertambah sesuai ukuran model
+  (jangan sampai sisa disk < 5 GB). Lihat file via terminal service `open-webui`
+  (`ls /app/backend/data`) atau halaman project Dokploy → **Volumes**.
 - Cek RAM saat model dipakai: `htop` → pastikan 12 GB tidak menipis habis saat 2 model termuat.
 
 ---
@@ -172,9 +204,11 @@ docker compose exec llama-server sh -c \
 - **Auto-pull model saat pertama deploy**: tambahkan satu-liner di compose (mis. satu service `bootstrap`
   yang `docker compose run llama-server ... -hf ibm-granite/granite-4.2-3b-GGUF` sekali jalan), supaya
   model sudah tersedia tanpa klik manual.
-- **Healthcheck** di `llama-server` (mis. `curl -f http://localhost:8080/health`) agar Dokploy tahu `healthy`.
-- **Backup**: tar/rsync `models/` + `data/` secara berkala (model & histori chat) ke S3 / disk lain.
-- **Domain + HTTPS** sudah disediakan Traefik Dokploy — tinggal tempel subdomain di service `open-webui`.
+- **Healthcheck** di `llama-server` (mis. `curl -f http://localhost:8080/health`) agar Dokploy menandai `healthy`.
+- **Backup otomatis**: aktifkan **Volume Backups** Dokploy untuk `models_data` & `openwebui_data`
+  (mis. ke S3) supaya model + histori chat selalu aman — backup named volume jauh lebih rapi
+  daripada menyalin folder `./`.
+- **Domain + HTTPS** sudah disediakan Traefik Dokploy — tinggal tempel subdomain di service `open-webui` (tab Domains).
 
 ---
 
