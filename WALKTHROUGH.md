@@ -224,7 +224,7 @@ Untuk memastikan named volume benar-benar dipakai (tidak hilang saat redeploy):
 
 | Gejala | Penyebab / solusi |
 |--------|-------------------|
-| Deploy gagal `failed to read dockerfile: no such file ...` / Dokploy mencoba *build* image | Service dibuat dengan **Build Method `Dockerfile`** padahal repo ini pakai image registry. Hapus service, buat baru dengan **Build Method `Docker Compose`**, dan set **Compose Path** ke `compose.yaml`. |
+| `llama-server` **crash-loop**, log `error: invalid argument: llama-server` | Image `llama.cpp:server` sudah ber-`ENTRYPOINT "/app/llama-server"`, jadi `command` TIDAK boleh diawali binari `llama-server` (komposisi jadi `llama-server llama-server ...`). Hapus item `llama-server` dari `command` lalu redeploy. | Service dibuat dengan **Build Method `Dockerfile`** padahal repo ini pakai image registry. Hapus service, buat baru dengan **Build Method `Docker Compose`**, dan set **Compose Path** ke `compose.yaml`. |
 | `timeout` saat list model | Model besar → naikkan `AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST=30` (sudah ada di compose). |
 | Panel **Manage** model tidak muncul / tombol eject error | Provider OpenAI belum **llama.cpp** → set manual di Connections → OpenAI. |
 | Server mati (OOM) saat 2 model jalan | Turunkan `CTX_SIZE` ke `2048`, atau `--models-max 1`, atau pilih model kuantisasi lebih kecil. |
